@@ -17,7 +17,7 @@ Die App liest eine Excel-Datei mit Labor-Anforderungsdaten ein und bietet folgen
 | **Vergleich zweier Einsender** | Side-by-side Top-15 Anforderungen |
 | **Daten-Explorer** | Freitextsuche + CSV-Export |
 
-Überall umschaltbar zwischen **Anzahl Untersuchungen** und **GOÄ-Punkte**. Einträge ohne GOÄ-Punkte (interne Steuerkennzeichen) werden standardmäßig ausgefiltert.
+Überall umschaltbar zwischen **Punktsumme** und **Anzahl**. Einträge mit Punktsumme = 0 (interne Steuerkennzeichen) werden standardmäßig ausgefiltert.
 
 ## Input-Format
 
@@ -30,16 +30,16 @@ input/
   MVZ Hamburg.xlsx
 ```
 
-Jede Datei enthält exakt **4 Spalten** in dieser Reihenfolge:
+Jede Datei muss **mindestens diese 4 Spalten** enthalten (exakt so benannt, weitere Spalten werden ignoriert):
 
-| Spalte | Typ | Beschreibung |
+| Spaltenname | Typ | Beschreibung |
 |---|---|---|
-| `VEINSENDERADRESSEN.VORNAME` | Text | Name der einsendenden Station / Ambulanz |
-| `VERFAHREN.BEZEICHNUNG` | Text | Name der Laboruntersuchung |
-| `# Untersuchungen` | Integer | Anzahl der durchgeführten Untersuchungen |
-| `GOÄ-Punkte` | Integer | Summe der GOÄ-Punkte (0 = kein Abrechnungswert) |
+| `Einsender` | Text | Name der einsendenden Station / Ambulanz |
+| `Analyse/Leistung` | Text | Name der Laboruntersuchung |
+| `Punktsumme` | Zahl | Summe der GOÄ-Punkte (0 = kein Abrechnungswert) |
+| `Anzahl` | Zahl | Anzahl der durchgeführten Untersuchungen |
 
-Jede Zeile entspricht einer eindeutigen Kombination aus Einsender und Anforderung.
+Fehlen eine oder mehrere dieser Spalten, zeigt die App eine Fehlermeldung. Jede Zeile entspricht einer eindeutigen Kombination aus Einsender und Analyse/Leistung.
 
 ## Installation & lokaler Start
 
