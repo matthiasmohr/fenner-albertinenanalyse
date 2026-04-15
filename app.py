@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-st.set_page_config(page_title="Labor-Analyse Albertinen-KH", layout="wide")
+st.set_page_config(page_title="Labor-Analyse", layout="wide")
 
 # --- Password protection ---
 def check_password():
@@ -34,22 +34,44 @@ def check_password():
 if not check_password():
     st.stop()
 
-st.title("Labor-Anforderungsanalyse — Albertinen-Krankenhaus")
+# --- Header info bar from env ---
+betrachtungszeitraum = os.environ.get("BETRACHTUNGSZEITRAUM", "–")
+datenimport_zeitpunkt = os.environ.get("DATENIMPORT_ZEITPUNKT", "–")
+exclude_zero_goae_default = os.environ.get("EXCLUDE_ZERO_GOAE", "true").lower() == "true"
 
-# --- Data Loading ---
+st.markdown(
+    f"**Betrachtungszeitraum:** {betrachtungszeitraum} · "
+    f"**Datenimport:** {datenimport_zeitpunkt}"
+)
+st.markdown("---")
+
+# --- Labor selection ---
 @st.cache_data
-def load_data():
-    df = pd.read_excel("input/input.xlsx")
+def find_labs():
+    files = sorted(f for f in os.listdir("input") if f.endswith(".xlsx"))
+    return {os.path.splitext(f)[0]: os.path.join("input", f) for f in files}
+
+@st.cache_data
+def load_data(path):
+    df = pd.read_excel(path)
     df.columns = ["Einsender", "Anforderung", "Untersuchungen", "GOÄ-Punkte"]
     return df
 
-df = load_data()
+labs = find_labs()
+if not labs:
+    st.error("Keine Excel-Dateien im Ordner `input/` gefunden.")
+    st.stop()
+
+selected_lab = st.sidebar.selectbox("Labor", list(labs.keys()))
+df = load_data(labs[selected_lab])
+
+st.title(f"Labor-Anforderungsanalyse — {selected_lab}")
 
 # --- Global filters ---
 metric = st.sidebar.radio("Kennzahl", ["Untersuchungen", "GOÄ-Punkte"], index=0)
 exclude_zero_goae = st.sidebar.checkbox(
     "Ohne GOÄ-Punkte ausschließen",
-    value=True,
+    value=exclude_zero_goae_default,
     help="Einträge mit 0 GOÄ-Punkten ausblenden (i.d.R. interne Steuerkennzeichen und Statistiken)",
 )
 if exclude_zero_goae:

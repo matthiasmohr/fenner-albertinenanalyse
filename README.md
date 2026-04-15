@@ -21,7 +21,16 @@ Die App liest eine Excel-Datei mit Labor-Anforderungsdaten ein und bietet folgen
 
 ## Input-Format
 
-Die Datei muss unter `input/input.xlsx` liegen und exakt **4 Spalten** in dieser Reihenfolge enthalten:
+Im Ordner `input/` liegt **eine Excel-Datei pro Labor**. Der Dateiname (ohne `.xlsx`) erscheint als Laborname in der Seitenleiste, z. B.:
+
+```
+input/
+  Albertinen-KH.xlsx
+  Fenner Labor.xlsx
+  MVZ Hamburg.xlsx
+```
+
+Jede Datei enthält exakt **4 Spalten** in dieser Reihenfolge:
 
 | Spalte | Typ | Beschreibung |
 |---|---|---|
