@@ -1,38 +1,73 @@
 import os
+import json
+from datetime import datetime
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from dotenv import load_dotenv
+import streamlit_authenticator as stauth
 
 load_dotenv()
 
 st.set_page_config(page_title="Labor-Analyse", layout="wide")
 
-# --- Password protection ---
-def check_password():
-    correct = os.environ.get("APP_PASSWORD", "")
-    if not correct:
-        st.error("APP_PASSWORD ist nicht gesetzt.")
-        st.stop()
+# --- Multi-user authentication ---
+LOGIN_LOG_PATH = "login_log.json"
 
-    if st.session_state.get("authenticated"):
-        return True
+def build_credentials():
+    users = os.environ.get("AUTH_USERS", "").split(",")
+    passwords = os.environ.get("AUTH_PASSWORDS", "").split(",")
+    names = os.environ.get("AUTH_NAMES", "").split(",")
+    roles = os.environ.get("AUTH_ROLES", "").split(",")
+    credentials = {"usernames": {}}
+    for user, pw, name, role in zip(users, passwords, names, roles):
+        credentials["usernames"][user.strip()] = {
+            "name": name.strip(),
+            "password": pw.strip(),
+            "role": role.strip(),
+            "email": "",
+        }
+    return credentials
 
-    st.title("Labor-Anforderungsanalyse — Albertinen-Krankenhaus")
-    st.subheader("Anmeldung")
-    pw = st.text_input("Passwort", type="password", key="pw_input")
-    if st.button("Anmelden"):
-        if pw == correct:
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("Falsches Passwort.")
-    return False
+def log_login(username):
+    log = {}
+    if os.path.exists(LOGIN_LOG_PATH):
+        with open(LOGIN_LOG_PATH, "r") as f:
+            log = json.load(f)
+    log[username] = datetime.now().isoformat(timespec="seconds")
+    with open(LOGIN_LOG_PATH, "w") as f:
+        json.dump(log, f, indent=2)
 
-if not check_password():
+credentials = build_credentials()
+cookie_key = os.environ.get("AUTH_COOKIE_KEY", "default_secret_key")
+
+authenticator = stauth.Authenticate(
+    credentials,
+    cookie_name="labor_analyse_auth",
+    cookie_key=cookie_key,
+    cookie_expiry_days=30,
+    auto_hash=True,
+)
+
+authenticator.login(
+    fields={"Form name": "Anmeldung", "Username": "Benutzername", "Password": "Passwort", "Login": "Anmelden"},
+)
+
+if st.session_state.get("authentication_status") is None:
     st.stop()
+elif st.session_state.get("authentication_status") is False:
+    st.error("Benutzername oder Passwort falsch.")
+    st.stop()
+
+# --- Authenticated: log login ---
+if not st.session_state.get("login_logged"):
+    log_login(st.session_state["username"])
+    st.session_state["login_logged"] = True
+
+current_user = st.session_state["username"]
+current_role = credentials["usernames"].get(current_user, {}).get("role", "user")
 
 # --- Header info bar from env ---
 betrachtungszeitraum = os.environ.get("BETRACHTUNGSZEITRAUM", "–")
@@ -41,9 +76,24 @@ exclude_zero_goae_default = os.environ.get("EXCLUDE_ZERO_GOAE", "true").lower() 
 
 st.markdown(
     f"**Betrachtungszeitraum:** {betrachtungszeitraum} · "
-    f"**Datenimport:** {datenimport_zeitpunkt}"
+    f"**Datenimport:** {datenimport_zeitpunkt} · "
+    f"**Angemeldet als:** {credentials['usernames'].get(current_user, {}).get('name', current_user)}"
 )
 st.markdown("---")
+
+# --- Admin: Login-Übersicht ---
+if current_role == "admin":
+    with st.expander("Admin: Letzte Logins"):
+        if os.path.exists(LOGIN_LOG_PATH):
+            with open(LOGIN_LOG_PATH, "r") as f:
+                log = json.load(f)
+            login_data = []
+            for username, timestamp in log.items():
+                name = credentials["usernames"].get(username, {}).get("name", username)
+                login_data.append({"Benutzer": name, "Benutzername": username, "Letzter Login": timestamp})
+            st.dataframe(pd.DataFrame(login_data), use_container_width=True, hide_index=True)
+        else:
+            st.info("Noch keine Logins aufgezeichnet.")
 
 # --- Labor selection ---
 @st.cache_data
