@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import numpy as np
 from dotenv import load_dotenv
 import streamlit_authenticator as stauth
+from streamlit_authenticator.utilities import LoginError
 
 load_dotenv()
 
@@ -31,11 +32,18 @@ def build_credentials():
         }
     return credentials
 
-def log_login(username):
-    log = {}
-    if os.path.exists(LOGIN_LOG_PATH):
+def _read_login_log():
+    if not os.path.exists(LOGIN_LOG_PATH):
+        return {}
+    try:
         with open(LOGIN_LOG_PATH, "r") as f:
-            log = json.load(f)
+            content = f.read().strip()
+            return json.loads(content) if content else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+def log_login(username):
+    log = _read_login_log()
     log[username] = datetime.now().isoformat(timespec="seconds")
     with open(LOGIN_LOG_PATH, "w") as f:
         json.dump(log, f, indent=2)
@@ -51,9 +59,21 @@ authenticator = stauth.Authenticate(
     auto_hash=True,
 )
 
-authenticator.login(
-    fields={"Form name": "Anmeldung", "Username": "Benutzername", "Password": "Passwort", "Login": "Anmelden"},
-)
+LOGIN_FIELDS = {"Form name": "Anmeldung", "Username": "Benutzername", "Password": "Passwort", "Login": "Anmelden"}
+
+try:
+    authenticator.login(fields=LOGIN_FIELDS)
+except LoginError:
+    # Stale Cookie (z.B. Nutzer ist nicht mehr in AUTH_USERS): Cookie verwerfen,
+    # logout-Flag setzen, damit get_cookie() den Token-Pfad überspringt, und Formular rendern.
+    try:
+        authenticator.cookie_controller.delete_cookie()
+    except Exception:
+        pass
+    st.session_state["logout"] = True
+    for key in ("authentication_status", "name", "username", "email", "roles", "login_logged"):
+        st.session_state.pop(key, None)
+    authenticator.login(fields=LOGIN_FIELDS)
 
 if st.session_state.get("authentication_status") is None:
     st.stop()
@@ -84,9 +104,8 @@ st.markdown("---")
 # --- Admin: Login-Übersicht ---
 if current_role == "admin":
     with st.expander("Admin: Letzte Logins"):
-        if os.path.exists(LOGIN_LOG_PATH):
-            with open(LOGIN_LOG_PATH, "r") as f:
-                log = json.load(f)
+        log = _read_login_log()
+        if log:
             login_data = []
             for username, timestamp in log.items():
                 name = credentials["usernames"].get(username, {}).get("name", username)
