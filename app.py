@@ -366,6 +366,10 @@ with col_e:
 with col_f:
     ein_b = st.selectbox("Einsender B", einsender_list, index=min(1, len(einsender_list)-1), key="cmp_b")
 
+if ein_a == ein_b:
+    st.warning("Bitte zwei verschiedene Einsender auswählen.")
+    st.stop()
+
 df_a = df[df["Einsender"] == ein_a].set_index("Analyse/Leistung")[metric].rename(ein_a)
 df_b = df[df["Einsender"] == ein_b].set_index("Analyse/Leistung")[metric].rename(ein_b)
 cmp = pd.concat([df_a, df_b], axis=1).fillna(0)
