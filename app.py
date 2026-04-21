@@ -172,14 +172,29 @@ col3.metric("Σ Punktsumme", f"{df['Punktsumme'].sum():,.0f}")
 col4.metric("Σ Anzahl", f"{df['Anzahl'].sum():,.0f}")
 
 einsender_agg = df.groupby("Einsender")[metric].sum().sort_values(ascending=False).reset_index()
+analyten_agg = df.groupby("Analyse/Leistung")[metric].sum().sort_values(ascending=False).reset_index()
 
-fig_bar = px.bar(
-    einsender_agg, x="Einsender", y=metric,
-    title=f"{metric} je Einsender",
-    color=metric, color_continuous_scale="Blues",
-)
-fig_bar.update_layout(xaxis_tickangle=-45, height=500, showlegend=False)
-st.plotly_chart(fig_bar, use_container_width=True)
+tab_ein, tab_ana = st.tabs(["Top Einsender", "Top Analyten"])
+
+with tab_ein:
+    fig_bar = px.bar(
+        einsender_agg, x="Einsender", y=metric,
+        title=f"{metric} je Einsender (alle)",
+        color=metric, color_continuous_scale="Blues",
+    )
+    fig_bar.update_layout(xaxis_tickangle=-45, height=500, showlegend=False)
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+with tab_ana:
+    n_top_ana = st.slider("Anzahl Top-Analyten", 10, 50, 25, key="ueberblick_top_ana")
+    top_ana = analyten_agg.head(n_top_ana)
+    fig_ana = px.bar(
+        top_ana, x=metric, y="Analyse/Leistung", orientation="h",
+        title=f"Top {n_top_ana} Analyten/Leistungen — {metric} (global)",
+        color=metric, color_continuous_scale="Teal",
+    )
+    fig_ana.update_layout(yaxis=dict(autorange="reversed"), height=max(500, n_top_ana * 22), showlegend=False)
+    st.plotly_chart(fig_ana, use_container_width=True)
 
 # ============================================================
 # 2. TOP 30 ANFORDERUNGEN JE EINSENDER
