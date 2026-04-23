@@ -148,7 +148,14 @@ except ValueError as e:
 st.title(f"Labor-Anforderungsanalyse — {selected_lab}")
 
 # --- Global filters ---
-metric = st.sidebar.radio("Kennzahl", ["Punktsumme", "Anzahl"], index=0)
+GOAE_BETRAG = 0.0582873  # GOÄ-Punktwert einfacher Satz (§5 Abs. 1 GOÄ)
+metric = st.sidebar.radio("Kennzahl", ["Punktsumme", "Anzahl", "Kalk. Kosten"], index=0)
+goae_faktor = st.sidebar.number_input(
+    "GOÄ-Faktor",
+    min_value=0.01, max_value=10.0, value=0.40, step=0.01, format="%.2f",
+    help=f"Kalk. Kosten = Punktsumme × {GOAE_BETRAG:.7f} € × GOÄ-Faktor",
+    disabled=(metric != "Kalk. Kosten"),
+)
 exclude_zero_goae = st.sidebar.checkbox(
     "Ohne Punktsumme ausschließen",
     value=exclude_zero_goae_default,
@@ -156,20 +163,28 @@ exclude_zero_goae = st.sidebar.checkbox(
 )
 if exclude_zero_goae:
     df = df[df["Punktsumme"] > 0]
+df["Kalk. Kosten"] = df["Punktsumme"] * GOAE_BETRAG * goae_faktor
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**{df['Einsender'].nunique()}** Einsender · **{df['Analyse/Leistung'].nunique()}** Analysen/Leistungen")
 st.sidebar.markdown(f"**{df['Punktsumme'].sum():,.0f}** Punktsumme · **{df['Anzahl'].sum():,.0f}** Anzahl")
+st.sidebar.markdown(f"**{df['Kalk. Kosten'].sum():,.2f} €** Kalk. Kosten")
+
+# Metric formatting helpers
+_cost_mode = metric == "Kalk. Kosten"
+_tick_fmt = dict(tickformat=",.2f", tickprefix="€\u202f") if _cost_mode else {}
+_cdata_fmt = "€\u202f%{customdata[1]:,.2f}" if _cost_mode else "%{customdata[1]:,.0f}"
 
 # ============================================================
 # 1. ÜBERBLICK
 # ============================================================
 st.header("1 · Überblick")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Einsender", df["Einsender"].nunique())
 col2.metric("Analysen/Leistungen", df["Analyse/Leistung"].nunique())
 col3.metric("Σ Punktsumme", f"{df['Punktsumme'].sum():,.0f}")
 col4.metric("Σ Anzahl", f"{df['Anzahl'].sum():,.0f}")
+col5.metric("Σ Kalk. Kosten", f"{df['Kalk. Kosten'].sum():,.2f} €")
 
 einsender_agg = df.groupby("Einsender")[metric].sum().sort_values(ascending=False).reset_index()
 analyten_agg = df.groupby("Analyse/Leistung")[metric].sum().sort_values(ascending=False).reset_index()
@@ -182,7 +197,8 @@ with tab_ein:
         title=f"{metric} je Einsender (alle)",
         color=metric, color_continuous_scale="Blues",
     )
-    fig_bar.update_layout(xaxis_tickangle=-45, height=500, showlegend=False)
+    fig_bar.update_layout(xaxis_tickangle=-45, height=500, showlegend=False,
+                          yaxis=_tick_fmt, coloraxis_colorbar=dict(**_tick_fmt))
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with tab_ana:
@@ -193,7 +209,8 @@ with tab_ana:
         title=f"Top {n_top_ana} Analyten/Leistungen — {metric} (global)",
         color=metric, color_continuous_scale="Teal",
     )
-    fig_ana.update_layout(yaxis=dict(autorange="reversed"), height=max(500, n_top_ana * 22), showlegend=False)
+    fig_ana.update_layout(yaxis=dict(autorange="reversed"), height=max(500, n_top_ana * 22), showlegend=False,
+                          xaxis=_tick_fmt, coloraxis_colorbar=dict(**_tick_fmt))
     st.plotly_chart(fig_ana, use_container_width=True)
 
 # ============================================================
@@ -214,11 +231,12 @@ with col_a:
         title=f"Top 30 Analysen/Leistungen — {selected_einsender}",
         color=metric, color_continuous_scale="Teal",
     )
-    fig_top30_anf.update_layout(yaxis=dict(autorange="reversed"), height=max(500, len(top30_anf) * 22), showlegend=False)
+    fig_top30_anf.update_layout(yaxis=dict(autorange="reversed"), height=max(500, len(top30_anf) * 22), showlegend=False,
+                                xaxis=_tick_fmt, coloraxis_colorbar=dict(**_tick_fmt))
     st.plotly_chart(fig_top30_anf, use_container_width=True)
 with col_b:
     st.dataframe(
-        top30_anf[["Analyse/Leistung", "Punktsumme", "Anzahl"]].reset_index(drop=True),
+        top30_anf[["Analyse/Leistung", "Punktsumme", "Anzahl", "Kalk. Kosten"]].reset_index(drop=True),
         use_container_width=True, height=max(500, len(top30_anf) * 22),
     )
 
@@ -240,11 +258,12 @@ with col_c:
         title=f"Top 30 Einsender — {selected_anforderung}",
         color=metric, color_continuous_scale="Oranges",
     )
-    fig_top30_ein.update_layout(yaxis=dict(autorange="reversed"), height=max(500, len(df_anf) * 22), showlegend=False)
+    fig_top30_ein.update_layout(yaxis=dict(autorange="reversed"), height=max(500, len(df_anf) * 22), showlegend=False,
+                                xaxis=_tick_fmt, coloraxis_colorbar=dict(**_tick_fmt))
     st.plotly_chart(fig_top30_ein, use_container_width=True)
 with col_d:
     st.dataframe(
-        df_anf[["Einsender", "Punktsumme", "Anzahl"]].reset_index(drop=True),
+        df_anf[["Einsender", "Punktsumme", "Anzahl", "Kalk. Kosten"]].reset_index(drop=True),
         use_container_width=True, height=max(500, len(df_anf) * 22),
     )
 
@@ -289,7 +308,7 @@ for i, anf in enumerate(anf_order):
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             f"Analyse/Leistung: {anf[:40]}<br>"
-            f"{metric}: %{{customdata[1]:,.0f}}<br>"
+            f"{metric}: {_cdata_fmt}<br>"
             "Anteil: %{y:.1f}%<extra></extra>"
         ),
         customdata=list(zip(
@@ -337,7 +356,8 @@ fig_heat = px.imshow(
     title=f"Heatmap ({metric})",
     labels=dict(color=metric),
 )
-fig_heat.update_layout(height=max(400, n_heat_anf * 28), xaxis_tickangle=-45)
+fig_heat.update_layout(height=max(400, n_heat_anf * 28), xaxis_tickangle=-45,
+                       coloraxis_colorbar=dict(**_tick_fmt))
 st.plotly_chart(fig_heat, use_container_width=True)
 
 # ============================================================
@@ -363,7 +383,7 @@ fig_pareto.add_hline(y=80, line_dash="dash", line_color="gray", yref="y2",
                      annotation_text="80 %", annotation_position="top left")
 fig_pareto.update_layout(
     title=f"Pareto-Analyse — {pareto_level} ({metric})",
-    yaxis=dict(title=metric),
+    yaxis=dict(title=metric, **_tick_fmt),
     yaxis2=dict(title="Kumulativ %", overlaying="y", side="right", range=[0, 105]),
     xaxis_tickangle=-45, height=500, showlegend=True,
     legend=dict(orientation="h", yanchor="bottom", y=1.02),
@@ -397,6 +417,7 @@ fig_cmp.add_trace(go.Bar(y=cmp.index, x=cmp[ein_b], name=ein_b[:25], orientation
 fig_cmp.update_layout(
     barmode="group", title=f"Vergleich: Top 15 Analysen/Leistungen ({metric})",
     yaxis=dict(autorange="reversed"), height=500,
+    xaxis=_tick_fmt,
 )
 st.plotly_chart(fig_cmp, use_container_width=True)
 
