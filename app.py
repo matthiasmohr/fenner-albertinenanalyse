@@ -93,6 +93,7 @@ current_role = credentials["usernames"].get(current_user, {}).get("role", "user"
 betrachtungszeitraum = os.environ.get("BETRACHTUNGSZEITRAUM", "–")
 datenimport_zeitpunkt = os.environ.get("DATENIMPORT_ZEITPUNKT", "–")
 exclude_zero_goae_default = os.environ.get("EXCLUDE_ZERO_GOAE", "true").lower() == "true"
+show_kosten = os.environ.get("SHOW_KOSTEN", "true").lower() == "true"
 
 st.markdown(
     f"**Betrachtungszeitraum:** {betrachtungszeitraum} · "
@@ -149,13 +150,17 @@ st.title(f"Labor-Anforderungsanalyse — {selected_lab}")
 
 # --- Global filters ---
 GOAE_BETRAG = 0.0582873  # GOÄ-Punktwert einfacher Satz (§5 Abs. 1 GOÄ)
-metric = st.sidebar.radio("Kennzahl", ["Punktsumme", "Anzahl", "Kalk. Kosten"], index=0)
-goae_faktor = st.sidebar.number_input(
-    "GOÄ-Faktor",
-    min_value=0.01, max_value=10.0, value=0.40, step=0.01, format="%.2f",
-    help=f"Kalk. Kosten = Punktsumme × {GOAE_BETRAG:.7f} € × GOÄ-Faktor",
-    disabled=(metric != "Kalk. Kosten"),
-)
+_metric_options = ["Punktsumme", "Anzahl"] + (["Kalk. Kosten"] if show_kosten else [])
+metric = st.sidebar.radio("Kennzahl", _metric_options, index=0)
+if show_kosten:
+    goae_faktor = st.sidebar.number_input(
+        "GOÄ-Faktor",
+        min_value=0.01, max_value=10.0, value=0.40, step=0.01, format="%.2f",
+        help=f"Kalk. Kosten = Punktsumme × {GOAE_BETRAG:.7f} € × GOÄ-Faktor",
+        disabled=(metric != "Kalk. Kosten"),
+    )
+else:
+    goae_faktor = 0.40
 exclude_zero_goae = st.sidebar.checkbox(
     "Ohne Punktsumme ausschließen",
     value=exclude_zero_goae_default,
@@ -167,7 +172,8 @@ df["Kalk. Kosten"] = df["Punktsumme"] * GOAE_BETRAG * goae_faktor
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**{df['Einsender'].nunique()}** Einsender · **{df['Analyse/Leistung'].nunique()}** Analysen/Leistungen")
 st.sidebar.markdown(f"**{df['Punktsumme'].sum():,.0f}** Punktsumme · **{df['Anzahl'].sum():,.0f}** Anzahl")
-st.sidebar.markdown(f"**{df['Kalk. Kosten'].sum():,.2f} €** Kalk. Kosten")
+if show_kosten:
+    st.sidebar.markdown(f"**{df['Kalk. Kosten'].sum():,.2f} €** Kalk. Kosten")
 
 # Metric formatting helpers
 _cost_mode = metric == "Kalk. Kosten"
@@ -179,12 +185,15 @@ _cdata_fmt = "€\u202f%{customdata[1]:,.2f}" if _cost_mode else "%{customdata[1
 # ============================================================
 st.header("1 · Überblick")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+if show_kosten:
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col5.metric("Σ Kalk. Kosten", f"{df['Kalk. Kosten'].sum():,.2f} €")
+else:
+    col1, col2, col3, col4 = st.columns(4)
 col1.metric("Einsender", df["Einsender"].nunique())
 col2.metric("Analysen/Leistungen", df["Analyse/Leistung"].nunique())
 col3.metric("Σ Punktsumme", f"{df['Punktsumme'].sum():,.0f}")
 col4.metric("Σ Anzahl", f"{df['Anzahl'].sum():,.0f}")
-col5.metric("Σ Kalk. Kosten", f"{df['Kalk. Kosten'].sum():,.2f} €")
 
 einsender_agg = df.groupby("Einsender")[metric].sum().sort_values(ascending=False).reset_index()
 analyten_agg = df.groupby("Analyse/Leistung")[metric].sum().sort_values(ascending=False).reset_index()
@@ -236,7 +245,7 @@ with col_a:
     st.plotly_chart(fig_top30_anf, use_container_width=True)
 with col_b:
     st.dataframe(
-        top30_anf[["Analyse/Leistung", "Punktsumme", "Anzahl", "Kalk. Kosten"]].reset_index(drop=True),
+        top30_anf[["Analyse/Leistung", "Punktsumme", "Anzahl"] + (["Kalk. Kosten"] if show_kosten else [])].reset_index(drop=True),
         use_container_width=True, height=max(500, len(top30_anf) * 22),
     )
 
@@ -263,7 +272,7 @@ with col_c:
     st.plotly_chart(fig_top30_ein, use_container_width=True)
 with col_d:
     st.dataframe(
-        df_anf[["Einsender", "Punktsumme", "Anzahl", "Kalk. Kosten"]].reset_index(drop=True),
+        df_anf[["Einsender", "Punktsumme", "Anzahl"] + (["Kalk. Kosten"] if show_kosten else [])].reset_index(drop=True),
         use_container_width=True, height=max(500, len(df_anf) * 22),
     )
 
